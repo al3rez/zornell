@@ -63,7 +63,6 @@ class ZornellAuth {
         this.userEmail = null;
         localStorage.removeItem('zornell_token');
         localStorage.removeItem('zornell_email');
-        localStorage.removeItem('zornellNotes'); // Clear local notes
     }
 
     async syncNotes(notes) {
