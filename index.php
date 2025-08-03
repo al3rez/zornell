@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZORNELL - Fast Notes</title>
     <meta name="description" content="Fast, efficient note-taking app with multi-select and keyboard shortcuts">
-    <link rel="stylesheet" href="style.css">
     <script>
 // Authentication module for Zornell
 const AUTH_API_URL = '/backend/api.php';

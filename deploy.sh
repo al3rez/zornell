@@ -16,7 +16,10 @@ tar -czf zornell-deploy.tar.gz \
     --exclude='deployment' \
     --exclude='.git' \
     --exclude='node_modules' \
-    index.php style.css auth.js backend/
+    --exclude='data' \
+    --exclude='backend/fresh.sh' \
+    --exclude='backend/seed.sql' \
+    index.php backend/
 
 # Upload to server
 echo "📤 Uploading files..."
