@@ -9,16 +9,9 @@ APP_DIR="/var/www/zornell"
 
 echo "🚀 Deploying Zornell to $SERVER_IP..."
 
-# Build optimized version
-echo "🔨 Building optimized version..."
-if [ -f "build-optimized.php" ]; then
-    php build-optimized.php
-    # Use optimized version as main index.php for deployment
-    cp index-optimized.php index-deploy.php
-else
-    # Fallback to regular index.php if build script doesn't exist
-    cp index.php index-deploy.php
-fi
+# Use index.php directly for deployment
+echo "📋 Using index.php for deployment..."
+cp index.php index-deploy.php
 
 # Create deployment package
 echo "📦 Creating deployment package..."
@@ -90,4 +83,3 @@ rm zornell-deploy.tar.gz
 rm index-deploy.php
 
 echo "🎉 Deployment finished! Your app should be available at http://$SERVER_IP"
-echo "📊 Deployed optimized version with ~12% size reduction"

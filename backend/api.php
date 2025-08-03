@@ -84,12 +84,12 @@ function validateEmail($email) {
 }
 
 function authenticateRequest($dbHelper) {
-    $headers = getallheaders();
-    $token = $headers['Authorization'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    
-    if (!$token) {
+    // Check for session token in HTTP-only cookie
+    if (!isset($_SESSION['auth_token'])) {
         return null;
     }
+    
+    $token = $_SESSION['auth_token'];
     
     $stmt = $dbHelper->prepare('
         SELECT user_id 
@@ -198,13 +198,24 @@ switch ($path) {
             $stmt->bindValue(1, $user['id'], SQLITE3_INTEGER);
             $stmt->execute();
             
-            // Set PHP session
+            // Set PHP session with HTTP-only cookie
             $_SESSION['auth_token'] = $token;
+            $_SESSION['user_id'] = $user['id'];
+            
+            // Ensure session cookie is HTTP-only and secure
+            $params = session_get_cookie_params();
+            setcookie(session_name(), session_id(), [
+                'expires' => time() + 86400 * 30,
+                'path' => $params['path'],
+                'domain' => $params['domain'],
+                'secure' => isset($_SERVER['HTTPS']),
+                'httponly' => true,
+                'samesite' => 'Strict'
+            ]);
             
             echo json_encode([
-                'token' => $token,
-                'user_id' => $user['id'],
-                'email' => $email
+                'success' => true,
+                'user_id' => $user['id']
             ]);
         } else {
             http_response_code(401);
@@ -213,19 +224,22 @@ switch ($path) {
         break;
         
     case 'logout':
-        $user_id = authenticateRequest($dbHelper);
-        if (!$user_id) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            exit;
+        // Don't check authentication for logout - just clear any existing session
+        if (isset($_SESSION['auth_token'])) {
+            $token = $_SESSION['auth_token'];
+            
+            $stmt = $dbHelper->prepare('DELETE FROM sessions WHERE token = ?');
+            $stmt->bindValue(1, $token, SQLITE3_TEXT);
+            $stmt->execute();
         }
         
-        $headers = getallheaders();
-        $token = $headers['Authorization'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-        
-        $stmt = $dbHelper->prepare('DELETE FROM sessions WHERE token = ?');
-        $stmt->bindValue(1, $token, SQLITE3_TEXT);
-        $stmt->execute();
+        // Clear session
+        $_SESSION = array();
+        if (ini_get("session.use_cookies")) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 3600, $params["path"], $params["domain"], $params["secure"], $params["httponly"]);
+        }
+        session_destroy();
         
         echo json_encode(['success' => true]);
         break;

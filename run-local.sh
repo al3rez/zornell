@@ -16,6 +16,7 @@ fi
 
 # Check PHP version
 PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
+r
 echo "📦 PHP version: $PHP_VERSION"
 
 # Check for SQLite extension
