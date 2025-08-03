@@ -639,10 +639,10 @@ function h($str) {
         }
         @media (max-width: 768px) {
             .add-note.mobile-only {
-                display: block;
+                display: none;
             }
             .add-note-placeholder {
-                display: none;
+                display: flex;
             }
             .header {
                 flex-wrap: wrap;
