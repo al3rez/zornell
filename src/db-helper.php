@@ -21,7 +21,7 @@ class DatabaseHelper {
     }
     
     private function connect() {
-        $db_path = __DIR__ . '/data/zornell.db';
+        $db_path = dirname(__DIR__) . '/backend/data/zornell.db';
         
         // Ensure directories exist
         if (!file_exists(dirname($db_path))) {

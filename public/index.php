@@ -5,7 +5,7 @@ session_start();
 if (isset($_GET['logout'])) {
     if (isset($_SESSION['auth_token'])) {
         try {
-            $db = new SQLite3(__DIR__ . '/backend/data/zornell.db');
+            $db = new SQLite3(dirname(__DIR__) . '/backend/data/zornell.db');
             $stmt = $db->prepare('DELETE FROM sessions WHERE token = ?');
             $stmt->bindValue(1, $_SESSION['auth_token'], SQLITE3_TEXT);
             $stmt->execute();
@@ -39,7 +39,7 @@ $userId = null;
 $userNotes = [];
 
 if (isset($_SESSION['auth_token'])) {
-    $db = new SQLite3(__DIR__ . '/backend/data/zornell.db');
+    $db = new SQLite3(dirname(__DIR__) . '/backend/data/zornell.db');
     $stmt = $db->prepare('SELECT u.email, s.token, s.user_id FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ? AND s.expires_at > datetime("now")');
     $stmt->bindValue(1, $_SESSION['auth_token'], SQLITE3_TEXT);
     $result = $stmt->execute();

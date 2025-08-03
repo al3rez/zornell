@@ -1,7 +1,7 @@
 <?php
 // Initialize database with schema
 
-$db_path = __DIR__ . '/data/zornell.db';
+$db_path = dirname(__DIR__) . '/backend/data/zornell.db';
 $schema_path = __DIR__ . '/schema.sql';
 
 // Create data directory if it doesn't exist

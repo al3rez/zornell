@@ -10,8 +10,8 @@ APP_DIR="/var/www/zornell"
 echo "🚀 Deploying Zornell to $SERVER_IP..."
 
 # Use index.php directly for deployment
-echo "📋 Using index.php for deployment..."
-cp index.php index-deploy.php
+echo "📋 Using public/index.php for deployment..."
+cp public/index.php index-deploy.php
 
 # Create deployment package
 echo "📦 Creating deployment package..."
@@ -19,7 +19,8 @@ echo "📦 Creating deployment package..."
 mkdir -p /tmp/zornell-deploy
 cp index-deploy.php /tmp/zornell-deploy/index.php
 cp -r backend /tmp/zornell-deploy/
-cp .htaccess /tmp/zornell-deploy/
+cp -r src /tmp/zornell-deploy/
+cp docs/nginx.conf /tmp/zornell-deploy/
 
 # Create tarball from temp directory
 tar -czf zornell-deploy.tar.gz \
@@ -31,6 +32,7 @@ tar -czf zornell-deploy.tar.gz \
     --exclude='data' \
     --exclude='backend/fresh.sh' \
     --exclude='backend/seed.sql' \
+    --exclude='src/seed.sql' \
     --exclude='build-optimized.php' \
     .
 
@@ -62,6 +64,18 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     # Extract new files
     tar -xzf /tmp/zornell-deploy.tar.gz
     rm /tmp/zornell-deploy.tar.gz
+    
+    # Set up public directory structure
+    mkdir -p public
+    mv index.php public/
+    
+    # Update nginx configuration
+    if [ -f nginx.conf ]; then
+        cp nginx.conf /etc/nginx/sites-available/zornell
+        ln -sf /etc/nginx/sites-available/zornell /etc/nginx/sites-enabled/
+        rm -f /etc/nginx/sites-enabled/default
+        nginx -t && systemctl reload nginx
+    fi
 
     # Set permissions
     chown -R www-data:www-data /var/www/zornell
@@ -69,7 +83,7 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     chmod -R 775 /var/www/zornell/backend/data
 
     # Setup cron for backups
-    (crontab -l 2>/dev/null | grep -v "zornell/backend/backup.sh"; echo "*/30 * * * * /var/www/zornell/backend/backup.sh") | crontab -
+    (crontab -l 2>/dev/null | grep -v "zornell/backend/backup.sh"; echo "*/30 * * * * /var/www/zornell/bin/backup.sh") | crontab -
 
     # Restart services
     systemctl restart php8.1-fpm

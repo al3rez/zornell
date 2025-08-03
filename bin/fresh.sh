@@ -7,12 +7,12 @@ echo "🔄 ZORNELL Database Fresh Start"
 echo "================================"
 
 # Set the database path
-DB_PATH="./data/zornell.db"
-BACKUP_DIR="./data/backups"
+DB_PATH="../backend/data/zornell.db"
+BACKUP_DIR="../backend/data/backups"
 
 # Create necessary directories
-mkdir -p ./data
-mkdir -p ./data/backups
+mkdir -p ../backend/data
+mkdir -p ../backend/data/backups
 
 # Backup existing database if it exists
 if [ -f "$DB_PATH" ]; then
@@ -25,16 +25,16 @@ fi
 
 # Create fresh database with schema
 echo "🏗️  Creating fresh database..."
-sqlite3 "$DB_PATH" < schema.sql
+sqlite3 "$DB_PATH" < ../src/schema.sql
 
 # Apply seed data
 echo "🌱 Applying seed data..."
-sqlite3 "$DB_PATH" < seed.sql
+sqlite3 "$DB_PATH" < ../resources/seed.sql
 
 # Set proper permissions
 chmod 644 "$DB_PATH"
-chmod 755 ./data
-chmod 755 ./data/backups
+chmod 755 ../backend/data
+chmod 755 ../backend/data/backups
 
 # Verify the database
 echo "✅ Verifying database..."

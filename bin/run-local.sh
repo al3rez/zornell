@@ -30,9 +30,9 @@ mkdir -p backend/data/backups
 echo "📁 Data directory ready"
 
 # Initialize database if needed
-if [ -f "backend/init-db.php" ]; then
+if [ -f "src/init-db.php" ]; then
     echo "🗄️  Initializing database..."
-    php backend/init-db.php
+    php src/init-db.php
 fi
 
 # Set permissions (may need sudo on some systems)
@@ -71,14 +71,14 @@ else
 fi
 
 # Start PHP server with proper document root
-php -S localhost:$PORT -t . -c /dev/null << 'EOF'
+php -S localhost:$PORT -t public -c /dev/null << 'EOF'
 <?php
 // Custom router for PHP built-in server
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 // Handle API requests
 if (strpos($uri, '/backend/api.php') === 0) {
-    include __DIR__ . '/backend/api.php';
+    include dirname(__DIR__) . '/src/api.php';
     return true;
 }
 
