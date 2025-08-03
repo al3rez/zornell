@@ -5,13 +5,15 @@ session_start();
 $isAuthenticated = false;
 $userEmail = null;
 $authToken = null;
+$userId = null;
+$userNotes = [];
 
 // Check for auth token in session
 if (isset($_SESSION['auth_token'])) {
     // Verify token is still valid
     $db = new SQLite3(__DIR__ . '/backend/data/zornell.db');
     $stmt = $db->prepare('
-        SELECT u.email, s.token 
+        SELECT u.email, s.token, s.user_id 
         FROM sessions s 
         JOIN users u ON s.user_id = u.id 
         WHERE s.token = ? AND s.expires_at > datetime("now")
@@ -24,6 +26,22 @@ if (isset($_SESSION['auth_token'])) {
         $isAuthenticated = true;
         $userEmail = $session['email'];
         $authToken = $session['token'];
+        $userId = $session['user_id'];
+        
+        // Fetch user notes for server-side rendering
+        $notesStmt = $db->prepare('
+            SELECT note_id as id, title, content, type, urgent, date
+            FROM notes 
+            WHERE user_id = ?
+            ORDER BY created_at ASC
+        ');
+        $notesStmt->bindValue(1, $userId, SQLITE3_INTEGER);
+        $notesResult = $notesStmt->execute();
+        
+        while ($row = $notesResult->fetchArray(SQLITE3_ASSOC)) {
+            $row['urgent'] = (bool)$row['urgent'];
+            $userNotes[] = $row;
+        }
     } else {
         // Invalid session, clear it
         unset($_SESSION['auth_token']);
@@ -45,6 +63,11 @@ if (isset($_GET['logout'])) {
     session_destroy();
     header('Location: /');
     exit;
+}
+
+// Helper function to escape HTML
+function h($str) {
+    return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
 }
 ?>
 <!DOCTYPE html>
@@ -947,6 +970,30 @@ body.has-selection .delete-selected-btn {
         </div>
 
         <div class="notes-container" id="notesContainer">
+            <?php if ($isAuthenticated && count($userNotes) > 0): ?>
+                <?php foreach ($userNotes as $note): ?>
+                    <div class="note-card <?php echo h($note['type']); ?><?php echo $note['urgent'] ? ' urgent' : ''; ?>" data-id="<?php echo h($note['id']); ?>">
+                        <div class="note-header">
+                            <div class="note-title" contenteditable="true" spellcheck="true" autocomplete="on" autocorrect="on" autocapitalize="on" onfocus="clearDefaultText(this, 'New Note')" onblur="updateNote('<?php echo h($note['id']); ?>', 'title', this.textContent)" onmousedown="handleContentClick(event, '<?php echo h($note['id']); ?>')" onclick="event.stopPropagation()"><?php echo h($note['title']); ?></div>
+                            <div class="note-meta">
+                                <span class="tag <?php echo h($note['type']); ?>"><?php echo strtoupper(h($note['type'])); ?></span>
+                                <?php if ($note['urgent']): ?>
+                                    <span class="tag urgent">URGENT</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="note-content" contenteditable="true" spellcheck="true" autocomplete="on" autocorrect="on" autocapitalize="sentences" onfocus="clearDefaultText(this, 'Start typing...')" onblur="updateNote('<?php echo h($note['id']); ?>', 'content', this.innerText)" onmousedown="handleContentClick(event, '<?php echo h($note['id']); ?>')" onclick="event.stopPropagation()"><?php echo h($note['content']); ?></div>
+                        <div class="note-footer">
+                            <span class="note-date"><?php echo h($note['date']); ?></span>
+                            <div class="note-actions">
+                                <button class="action-btn" onclick="toggleType(event, '<?php echo h($note['id']); ?>')"><?php echo $note['type'] === 'work' ? 'PERSONAL' : 'WORK'; ?></button>
+                                <button class="action-btn" onclick="toggleUrgent(event, '<?php echo h($note['id']); ?>')">URGENT</button>
+                                <button class="action-btn" onclick="event.stopPropagation(); deleteNote('<?php echo h($note['id']); ?>')">DELETE</button>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
             <div class="note-card add-note-placeholder" onclick="addNewNote()">
                 <div class="placeholder-content">
                     <span class="plus-icon">+</span>
@@ -1220,6 +1267,9 @@ body.has-selection .delete-selected-btn {
                     </div>
                 `;
                 container.appendChild(newPlaceholder);
+                
+                // Attach click handlers to newly rendered notes
+                attachNoteHandlers();
             });
         }
 
@@ -1623,23 +1673,62 @@ body.has-selection .delete-selected-btn {
         
         async function loadUserNotes() {
             try {
-                const serverNotes = await auth.fetchNotes();
-                notesMap.clear();
-                
-                // Only add notes if they have actual content
-                if (Array.isArray(serverNotes)) {
-                    serverNotes.forEach(note => {
-                        // Skip empty notes
-                        if (note.title || note.content) {
-                            notesMap.set(note.id, note);
-                        }
+                // Check if notes were already rendered server-side
+                const existingNotes = document.querySelectorAll('.note-card:not(.add-note-placeholder)');
+                if (existingNotes.length > 0) {
+                    // Initialize notesMap from server-rendered notes
+                    existingNotes.forEach(noteEl => {
+                        const id = noteEl.dataset.id;
+                        const titleEl = noteEl.querySelector('.note-title');
+                        const contentEl = noteEl.querySelector('.note-content');
+                        const typeTag = noteEl.querySelector('.tag:not(.urgent)');
+                        const urgentTag = noteEl.querySelector('.tag.urgent');
+                        const dateEl = noteEl.querySelector('.note-date');
+                        
+                        const note = {
+                            id: id,
+                            title: titleEl ? titleEl.textContent : '',
+                            content: contentEl ? contentEl.textContent : '',
+                            type: typeTag ? typeTag.textContent.toLowerCase() : 'personal',
+                            urgent: !!urgentTag,
+                            date: dateEl ? dateEl.textContent : new Date().toLocaleDateString()
+                        };
+                        
+                        notesMap.set(id, note);
                     });
+                    
+                    // Attach click handlers to server-rendered notes
+                    attachNoteHandlers();
+                } else {
+                    // No server-rendered notes, fetch from API
+                    const serverNotes = await auth.fetchNotes();
+                    notesMap.clear();
+                    
+                    // Only add notes if they have actual content
+                    if (Array.isArray(serverNotes)) {
+                        serverNotes.forEach(note => {
+                            // Skip empty notes
+                            if (note.title || note.content) {
+                                notesMap.set(note.id, note);
+                            }
+                        });
+                    }
+                    
+                    renderNotes();
                 }
-                
-                renderNotes();
             } catch (error) {
                 console.error('Failed to load notes:', error);
             }
+        }
+        
+        function attachNoteHandlers() {
+            // Attach click handlers to all note cards
+            document.querySelectorAll('.note-card:not(.add-note-placeholder)').forEach(noteEl => {
+                const id = noteEl.dataset.id;
+                if (!noteEl.onclick) {
+                    noteEl.onclick = (e) => handleNoteClick(e, id);
+                }
+            });
         }
         
         async function syncToServer() {
