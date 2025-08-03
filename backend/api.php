@@ -1,6 +1,31 @@
 <?php
 session_start();
 
+// Error logging
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/data/error.log');
+
+// Custom error handler for better debugging
+function apiErrorHandler($errno, $errstr, $errfile, $errline) {
+    $error = [
+        'type' => $errno,
+        'message' => $errstr,
+        'file' => $errfile,
+        'line' => $errline,
+        'time' => date('Y-m-d H:i:s'),
+        'request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_SERVER['REQUEST_URI']
+    ];
+    error_log(json_encode($error) . PHP_EOL, 3, __DIR__ . '/data/api-errors.log');
+    
+    // Return JSON error response
+    http_response_code(500);
+    echo json_encode(['error' => 'Internal server error', 'details' => $errstr]);
+    exit;
+}
+set_error_handler('apiErrorHandler');
+
 // Performance: Enable output compression
 if (!ob_get_level()) {
     ob_start('ob_gzhandler');
@@ -58,7 +83,7 @@ function validateEmail($email) {
     return filter_var($email, FILTER_VALIDATE_EMAIL);
 }
 
-function authenticateRequest($db) {
+function authenticateRequest($dbHelper) {
     $headers = getallheaders();
     $token = $headers['Authorization'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? '';
     
@@ -188,7 +213,7 @@ switch ($path) {
         break;
         
     case 'logout':
-        $user_id = authenticateRequest($db);
+        $user_id = authenticateRequest($dbHelper);
         if (!$user_id) {
             http_response_code(401);
             echo json_encode(['error' => 'Unauthorized']);
@@ -206,7 +231,7 @@ switch ($path) {
         break;
         
     case 'notes':
-        $user_id = authenticateRequest($db);
+        $user_id = authenticateRequest($dbHelper);
         if (!$user_id) {
             http_response_code(401);
             echo json_encode(['error' => 'Unauthorized']);
@@ -304,7 +329,7 @@ switch ($path) {
         break;
         
     case 'create_note':
-        $user_id = authenticateRequest($db);
+        $user_id = authenticateRequest($dbHelper);
         if (!$user_id) {
             http_response_code(401);
             echo json_encode(['error' => 'Unauthorized']);
@@ -351,7 +376,7 @@ switch ($path) {
         break;
         
     case 'note':
-        $user_id = authenticateRequest($db);
+        $user_id = authenticateRequest($dbHelper);
         if (!$user_id) {
             http_response_code(401);
             echo json_encode(['error' => 'Unauthorized']);
@@ -359,36 +384,65 @@ switch ($path) {
         }
         
         if ($method === 'PUT') {
-            // Update a specific note
-            $note_id = $_GET['id'] ?? '';
-            
-            if (!$note_id) {
-                http_response_code(400);
-                echo json_encode(['error' => 'Note ID required']);
-                exit;
-            }
-            
-            $data = json_decode(file_get_contents('php://input'), true);
-            
-            // Update note
-            $stmt = $dbHelper->prepare('
-                UPDATE notes 
-                SET title = ?, content = ?, type = ?, urgent = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE note_id = ? AND user_id = ?
-            ');
-            $stmt->bindValue(1, $data['title'] ?? '', SQLITE3_TEXT);
-            $stmt->bindValue(2, $data['content'] ?? '', SQLITE3_TEXT);
-            $stmt->bindValue(3, $data['type'] ?? 'personal', SQLITE3_TEXT);
-            $stmt->bindValue(4, isset($data['urgent']) ? ($data['urgent'] ? 1 : 0) : 0, SQLITE3_INTEGER);
-            $stmt->bindValue(5, $note_id, SQLITE3_TEXT);
-            $stmt->bindValue(6, $user_id, SQLITE3_INTEGER);
-            $result = $stmt->execute();
-            
-            if ($db->changes() > 0) {
-                echo json_encode(['success' => true]);
-            } else {
-                http_response_code(404);
-                echo json_encode(['error' => 'Note not found']);
+            try {
+                // Update a specific note
+                $note_id = $_GET['id'] ?? '';
+                
+                error_log("PUT request for note: $note_id by user: $user_id");
+                
+                if (!$note_id) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Note ID required']);
+                    exit;
+                }
+                
+                $input = file_get_contents('php://input');
+                $data = json_decode($input, true);
+                
+                error_log("PUT data received: " . $input);
+                
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON: ' . json_last_error_msg()]);
+                    exit;
+                }
+                
+                // Update note
+                $stmt = $dbHelper->prepare('
+                    UPDATE notes 
+                    SET title = ?, content = ?, type = ?, urgent = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE note_id = ? AND user_id = ?
+                ');
+                
+                if (!$stmt) {
+                    throw new Exception("Failed to prepare statement: " . $db->lastErrorMsg());
+                }
+                
+                $stmt->bindValue(1, $data['title'] ?? '', SQLITE3_TEXT);
+                $stmt->bindValue(2, $data['content'] ?? '', SQLITE3_TEXT);
+                $stmt->bindValue(3, $data['type'] ?? 'personal', SQLITE3_TEXT);
+                $stmt->bindValue(4, isset($data['urgent']) ? ($data['urgent'] ? 1 : 0) : 0, SQLITE3_INTEGER);
+                $stmt->bindValue(5, $note_id, SQLITE3_TEXT);
+                $stmt->bindValue(6, $user_id, SQLITE3_INTEGER);
+                
+                $result = $stmt->execute();
+                
+                if (!$result) {
+                    throw new Exception("Failed to execute update: " . $db->lastErrorMsg());
+                }
+                
+                if ($db->changes() > 0) {
+                    echo json_encode(['success' => true]);
+                    error_log("Note $note_id updated successfully");
+                } else {
+                    http_response_code(404);
+                    echo json_encode(['error' => 'Note not found']);
+                    error_log("Note $note_id not found for user $user_id");
+                }
+            } catch (Exception $e) {
+                error_log("PUT error: " . $e->getMessage());
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to update note', 'details' => $e->getMessage()]);
             }
         }
         break;

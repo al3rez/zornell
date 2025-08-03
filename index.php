@@ -64,6 +64,18 @@ if (isset($_GET['logout'])) {
         $db->close();
     }
     
+    // Clear the session completely
+    $_SESSION = array();
+    
+    // Destroy the session cookie
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+    
     session_destroy();
     header('Location: /');
     exit;
@@ -147,6 +159,10 @@ class ZornellAuth {
     }
 
     async logout() {
+        // Clear local storage first
+        localStorage.removeItem('zornell_token');
+        localStorage.removeItem('zornell_email');
+        
         // Use PHP logout which will clear session and redirect
         window.location.href = '/?logout=1';
     }
@@ -298,6 +314,7 @@ h1 {
     font-size: 1.2em;
     font-weight: 700;
 }
+
 
 .controls {
     display: flex;
