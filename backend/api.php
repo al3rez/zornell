@@ -215,7 +215,7 @@ switch ($path) {
                 SELECT note_id as id, title, content, type, urgent, date
                 FROM notes 
                 WHERE user_id = ?
-                ORDER BY updated_at DESC
+                ORDER BY created_at ASC
             ');
             $stmt->bindValue(1, $user_id, SQLITE3_INTEGER);
             $result = $stmt->execute();

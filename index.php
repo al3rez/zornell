@@ -1092,7 +1092,7 @@ body.has-selection .delete-selected-btn {
             const placeholder = container.querySelector('.add-note-placeholder');
             const noteElement = createNoteElement(note);
             
-            // Insert new note before placeholder with animation
+            // Insert new note at the end, just before placeholder
             container.insertBefore(noteElement, placeholder);
             
             // Trigger reflow for animation
