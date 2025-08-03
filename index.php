@@ -993,7 +993,7 @@ body.has-selection .delete-selected-btn {
                 <div class="export-menu" id="exportMenu" style="display: none;">
                 <button class="export-option" onclick="exportAsJSON()">Export as JSON</button>
                 <button class="export-option" onclick="exportAsText()">Export as TXT</button>
-                <button class="export-option" onclick="exportAsMarkdown()">Export as Markdown</button>
+                <button class="export-option" onclick="exportAsMarkdown()">Export as MD</button>
                     <button class="export-option" onclick="window.print()">Print / PDF</button>
                 </div>
             </div>
