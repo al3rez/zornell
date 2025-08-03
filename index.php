@@ -685,9 +685,6 @@ body.has-selection .delete-selected-btn {
         order: 1;
     }
     
-    .user-email {
-        display: none; /* Hide email on mobile, keep logout */
-    }
 }
 
 
@@ -894,11 +891,6 @@ body.has-selection .delete-selected-btn {
     gap: 5px;
 }
 
-.user-email {
-    color: #0ff;
-    font-size: 12px;
-}
-
 .logout-btn, a.logout-btn {
     padding: 6px 12px;
     background: transparent;
@@ -938,7 +930,6 @@ body.has-selection .delete-selected-btn {
                 <button class="export-btn" onclick="showExportMenu()" title="More options">⋮</button>
                 <?php if ($isAuthenticated): ?>
                 <div class="user-info" id="userInfo">
-                    <span class="user-email"><?php echo htmlspecialchars($userEmail); ?></span>
                     <a href="/?logout=1" class="logout-btn">LOGOUT</a>
                 </div>
                 <?php else: ?>
