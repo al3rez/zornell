@@ -1,4 +1,6 @@
 <?php
+session_start();
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -166,6 +168,9 @@ switch ($path) {
             $stmt = $db->prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?');
             $stmt->bindValue(1, $user['id'], SQLITE3_INTEGER);
             $stmt->execute();
+            
+            // Set PHP session
+            $_SESSION['auth_token'] = $token;
             
             echo json_encode([
                 'token' => $token,

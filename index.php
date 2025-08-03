@@ -1,3 +1,52 @@
+<?php
+session_start();
+
+// Check if user is authenticated via session
+$isAuthenticated = false;
+$userEmail = null;
+$authToken = null;
+
+// Check for auth token in session
+if (isset($_SESSION['auth_token'])) {
+    // Verify token is still valid
+    $db = new SQLite3(__DIR__ . '/backend/data/zornell.db');
+    $stmt = $db->prepare('
+        SELECT u.email, s.token 
+        FROM sessions s 
+        JOIN users u ON s.user_id = u.id 
+        WHERE s.token = ? AND s.expires_at > datetime("now")
+    ');
+    $stmt->bindValue(1, $_SESSION['auth_token'], SQLITE3_TEXT);
+    $result = $stmt->execute();
+    $session = $result->fetchArray(SQLITE3_ASSOC);
+    
+    if ($session) {
+        $isAuthenticated = true;
+        $userEmail = $session['email'];
+        $authToken = $session['token'];
+    } else {
+        // Invalid session, clear it
+        unset($_SESSION['auth_token']);
+    }
+    $db->close();
+}
+
+// Handle logout
+if (isset($_GET['logout'])) {
+    if (isset($_SESSION['auth_token'])) {
+        // Remove session from database
+        $db = new SQLite3(__DIR__ . '/backend/data/zornell.db');
+        $stmt = $db->prepare('DELETE FROM sessions WHERE token = ?');
+        $stmt->bindValue(1, $_SESSION['auth_token'], SQLITE3_TEXT);
+        $stmt->execute();
+        $db->close();
+    }
+    
+    session_destroy();
+    header('Location: /');
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,11 +57,23 @@
     <script>
 // Authentication module for Zornell
 const AUTH_API_URL = '/backend/api.php';
+const IS_AUTHENTICATED = <?php echo $isAuthenticated ? 'true' : 'false'; ?>;
+const AUTH_TOKEN = <?php echo $authToken ? "'$authToken'" : 'null'; ?>;
+const USER_EMAIL = <?php echo $userEmail ? "'$userEmail'" : 'null'; ?>;
 
 class ZornellAuth {
     constructor() {
-        this.token = localStorage.getItem('zornell_token');
-        this.userEmail = localStorage.getItem('zornell_email');
+        // Use server-provided values first, fallback to localStorage
+        this.token = AUTH_TOKEN || localStorage.getItem('zornell_token');
+        this.userEmail = USER_EMAIL || localStorage.getItem('zornell_email');
+        
+        // Sync with localStorage if server provided values
+        if (AUTH_TOKEN && AUTH_TOKEN !== localStorage.getItem('zornell_token')) {
+            localStorage.setItem('zornell_token', AUTH_TOKEN);
+        }
+        if (USER_EMAIL && USER_EMAIL !== localStorage.getItem('zornell_email')) {
+            localStorage.setItem('zornell_email', USER_EMAIL);
+        }
     }
 
     isAuthenticated() {
@@ -50,27 +111,17 @@ class ZornellAuth {
         this.userEmail = data.email;
         localStorage.setItem('zornell_token', data.token);
         localStorage.setItem('zornell_email', data.email);
+        
+        // Also set PHP session by reloading page
+        // This will trigger the PHP session check at the top
+        window.location.reload();
 
         return data;
     }
 
     async logout() {
-        if (!this.token) return;
-
-        try {
-            await fetch(`${AUTH_API_URL}?action=logout`, {
-                method: 'POST',
-                headers: { 'Authorization': this.token }
-            });
-        } catch (e) {
-            // Continue with local logout even if request fails
-        }
-
-        // Clear local auth data
-        this.token = null;
-        this.userEmail = null;
-        localStorage.removeItem('zornell_token');
-        localStorage.removeItem('zornell_email');
+        // Use PHP logout which will clear session and redirect
+        window.location.href = '/?logout=1';
     }
 
     async syncNotes(notes) {
@@ -848,7 +899,7 @@ body.has-selection .delete-selected-btn {
     font-size: 12px;
 }
 
-.logout-btn {
+.logout-btn, a.logout-btn {
     padding: 6px 12px;
     background: transparent;
     border: 1px solid #f00;
@@ -859,9 +910,11 @@ body.has-selection .delete-selected-btn {
     transition: all 0.1s;
     font-family: inherit;
     font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
 }
 
-.logout-btn:hover {
+.logout-btn:hover, a.logout-btn:hover {
     background: #f00;
     color: #fff;
 }
@@ -883,9 +936,16 @@ body.has-selection .delete-selected-btn {
             </div>
             <div class="user-section">
                 <button class="export-btn" onclick="showExportMenu()" title="More options">⋮</button>
+                <?php if ($isAuthenticated): ?>
+                <div class="user-info" id="userInfo">
+                    <span class="user-email"><?php echo htmlspecialchars($userEmail); ?></span>
+                    <a href="/?logout=1" class="logout-btn">LOGOUT</a>
+                </div>
+                <?php else: ?>
                 <div class="user-info" id="userInfo" style="display: none;">
                     <button class="logout-btn" onclick="logout()">LOGOUT</button>
                 </div>
+                <?php endif; ?>
                 <div class="export-menu" id="exportMenu" style="display: none;">
                 <button class="export-option" onclick="exportAsJSON()">Export as JSON</button>
                 <button class="export-option" onclick="exportAsText()">Export as TXT</button>
@@ -1636,7 +1696,7 @@ body.has-selection .delete-selected-btn {
         // Initialize
         auth = new ZornellAuth();
         
-        if (auth.isAuthenticated()) {
+        if (IS_AUTHENTICATED || auth.isAuthenticated()) {
             loadUserNotes();
             updateUserUI();
             startSync();

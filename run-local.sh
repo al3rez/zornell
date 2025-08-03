@@ -28,6 +28,12 @@ fi
 mkdir -p backend/data/backups
 echo "📁 Data directory ready"
 
+# Initialize database if needed
+if [ -f "backend/init-db.php" ]; then
+    echo "🗄️  Initializing database..."
+    php backend/init-db.php
+fi
+
 # Set permissions (may need sudo on some systems)
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     chmod -R 777 backend/data 2>/dev/null || {
