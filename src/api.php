@@ -1,11 +1,14 @@
 <?php
 session_start();
 
+// Load configuration
+$config = require dirname(__DIR__) . '/config/database.php';
+
 // Error logging
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
-ini_set('error_log', dirname(__DIR__) . '/backend/data/error.log');
+ini_set('error_log', $config['error_log']);
 
 // Custom error handler for better debugging
 function apiErrorHandler($errno, $errstr, $errfile, $errline) {
@@ -17,7 +20,8 @@ function apiErrorHandler($errno, $errstr, $errfile, $errline) {
         'time' => date('Y-m-d H:i:s'),
         'request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_SERVER['REQUEST_URI']
     ];
-    error_log(json_encode($error) . PHP_EOL, 3, dirname(__DIR__) . '/backend/data/api-errors.log');
+    global $config;
+    error_log(json_encode($error) . PHP_EOL, 3, $config['api_error_log']);
     
     // Return JSON error response
     http_response_code(500);
@@ -49,9 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Include database helper
 require_once __DIR__ . '/db-helper.php';
 
-// Database configuration
-$db_path = dirname(__DIR__) . '/backend/data/zornell.db';
-$backup_dir = dirname(__DIR__) . '/backend/data/backups';
+// Database configuration from config file
+$db_path = $config['database_path'];
+$backup_dir = $config['backup_dir'];
 
 // Ensure backup directory exists
 if (!file_exists($backup_dir)) {

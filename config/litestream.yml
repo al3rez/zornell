@@ -1,0 +1,56 @@
+# Litestream configuration for Zornell
+# Real-time SQLite replication to cloud storage
+# 
+# Installation:
+# wget https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.deb
+# sudo dpkg -i litestream-v0.3.13-linux-amd64.deb
+#
+# Run as service:
+# sudo systemctl enable litestream
+# sudo systemctl start litestream
+
+dbs:
+  - path: /var/lib/zornell/database/zornell.db
+    replicas:
+      # S3-compatible storage (Hetzner Storage Box example)
+      # - type: s3
+      #   endpoint: https://your-storage-box.your-region.backblazeb2.com
+      #   bucket: zornell-backups
+      #   path: production
+      #   access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+      #   secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+      #   retention: 168h  # 7 days
+      #   retention-check-interval: 24h
+      #   sync-interval: 10s
+      
+      # Local file backup (for testing)
+      - type: file
+        path: /var/lib/zornell/litestream-backups
+        retention: 72h  # 3 days
+        retention-check-interval: 1h
+        
+      # AWS S3 (production recommended)
+      # - type: s3
+      #   bucket: my-app-db-backups
+      #   path: zornell/production
+      #   region: us-east-1
+      #   access-key-id: ${AWS_ACCESS_KEY_ID}
+      #   secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+      #   retention: 720h  # 30 days
+      
+      # DigitalOcean Spaces
+      # - type: s3
+      #   endpoint: https://nyc3.digitaloceanspaces.com
+      #   bucket: my-db-backups
+      #   path: zornell/production
+      #   region: nyc3
+      #   access-key-id: ${DO_SPACES_KEY}
+      #   secret-access-key: ${DO_SPACES_SECRET}
+
+# Prometheus monitoring endpoint (optional)
+# addr: ":9090"
+
+# Logging
+logging:
+  level: info
+  # type: json  # Use for structured logging

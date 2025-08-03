@@ -1,19 +1,22 @@
 <?php
 // Initialize database with schema
 
-$db_path = dirname(__DIR__) . '/backend/data/zornell.db';
+$config = require dirname(__DIR__) . '/config/database.php';
+$db_path = $config['database_path'];
 $schema_path = __DIR__ . '/schema.sql';
 
 // Create data directory if it doesn't exist
 if (!file_exists(dirname($db_path))) {
-    mkdir(dirname($db_path), 0777, true);
+    mkdir(dirname($db_path), $config['directory_permissions'], true);
 }
 
 try {
     // Open database
     $db = new SQLite3($db_path);
-    $db->exec('PRAGMA foreign_keys = ON');
-    $db->exec('PRAGMA journal_mode = WAL');
+    // Apply pragmas from config
+    foreach ($config['pragmas'] as $pragma) {
+        $db->exec($pragma);
+    }
     
     // Read and execute schema
     if (file_exists($schema_path)) {

@@ -21,22 +21,20 @@ class DatabaseHelper {
     }
     
     private function connect() {
-        $db_path = dirname(__DIR__) . '/backend/data/zornell.db';
+        $config = require dirname(__DIR__) . '/config/database.php';
+        $db_path = $config['database_path'];
         
         // Ensure directories exist
         if (!file_exists(dirname($db_path))) {
-            mkdir(dirname($db_path), 0755, true);
+            mkdir(dirname($db_path), $config['directory_permissions'], true);
         }
         
         $this->db = new SQLite3($db_path);
         
-        // Performance optimizations
-        $this->db->exec('PRAGMA foreign_keys = ON');
-        $this->db->exec('PRAGMA journal_mode = WAL'); // Better concurrency
-        $this->db->exec('PRAGMA synchronous = NORMAL'); // Faster writes
-        $this->db->exec('PRAGMA cache_size = 10000'); // Larger cache
-        $this->db->exec('PRAGMA temp_store = MEMORY'); // Use memory for temp tables
-        $this->db->exec('PRAGMA mmap_size = 30000000000'); // Use memory-mapped I/O
+        // Apply performance optimizations from config
+        foreach ($config['pragmas'] as $pragma) {
+            $this->db->exec($pragma);
+        }
         
         // Create tables if not exist
         $schema = file_get_contents(__DIR__ . '/schema.sql');

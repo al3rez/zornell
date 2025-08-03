@@ -20,6 +20,8 @@ mkdir -p /tmp/zornell-deploy
 cp index-deploy.php /tmp/zornell-deploy/index.php
 cp -r backend /tmp/zornell-deploy/
 cp -r src /tmp/zornell-deploy/
+cp -r config /tmp/zornell-deploy/
+cp -r bin /tmp/zornell-deploy/
 cp docs/nginx.conf /tmp/zornell-deploy/
 
 # Create tarball from temp directory
@@ -56,9 +58,17 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     mkdir -p /var/www/zornell
     cd /var/www/zornell
 
+    # Create /var/lib/zornell structure
+    mkdir -p /var/lib/zornell/database
+    mkdir -p /var/lib/zornell/backups
+    mkdir -p /var/lib/zornell/logs
+    
     # Backup existing data if any
-    if [ -f "data/zornell.db" ]; then
-        cp data/zornell.db data/zornell.db.backup.$(date +%s)
+    if [ -f "/var/lib/zornell/database/zornell.db" ]; then
+        cp /var/lib/zornell/database/zornell.db /var/lib/zornell/backups/zornell.db.backup.$(date +%s)
+    elif [ -f "backend/data/zornell.db" ]; then
+        # Migrate from old location if exists
+        cp backend/data/zornell.db /var/lib/zornell/database/zornell.db
     fi
 
     # Extract new files
@@ -80,10 +90,24 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     # Set permissions
     chown -R www-data:www-data /var/www/zornell
     chmod -R 755 /var/www/zornell
-    chmod -R 775 /var/www/zornell/backend/data
+    
+    # Set permissions for /var/lib/zornell
+    chown -R www-data:www-data /var/lib/zornell
+    chmod 750 /var/lib/zornell
+    chmod 750 /var/lib/zornell/database
+    chmod 750 /var/lib/zornell/backups
+    chmod 750 /var/lib/zornell/logs
+    if [ -f /var/lib/zornell/database/zornell.db ]; then
+        chmod 640 /var/lib/zornell/database/zornell.db
+    fi
 
     # Setup cron for backups
-    (crontab -l 2>/dev/null | grep -v "zornell/backend/backup.sh"; echo "*/30 * * * * /var/www/zornell/bin/backup.sh") | crontab -
+    (crontab -l 2>/dev/null | grep -v "zornell.*backup.sh"; echo "*/30 * * * * /var/www/zornell/bin/backup.sh") | crontab -
+    
+    # Run database migration if needed
+    if [ -f /var/www/zornell/bin/migrate-database.sh ]; then
+        /var/www/zornell/bin/migrate-database.sh || true
+    fi
 
     # Restart services
     systemctl restart php8.1-fpm

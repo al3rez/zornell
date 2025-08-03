@@ -3,9 +3,9 @@
 # Zornell Database Backup Script
 # Runs via cron to ensure zero data loss
 
-BACKUP_DIR="/var/www/zornell/data/backups"
-DB_PATH="/var/www/zornell/data/zornell.db"
-REMOTE_BACKUP="/var/www/zornell/data/remote-backups"
+BACKUP_DIR="/var/lib/zornell/backups"
+DB_PATH="/var/lib/zornell/database/zornell.db"
+REMOTE_BACKUP="/var/lib/zornell/remote-backups"
 
 # Create directories if they don't exist
 mkdir -p "$BACKUP_DIR"
