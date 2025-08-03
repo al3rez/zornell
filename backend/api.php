@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 // Handle preflight requests
@@ -38,6 +38,14 @@ $path = $_GET['action'] ?? '';
 // Helper functions
 function generateToken() {
     return bin2hex(random_bytes(32));
+}
+
+function generateNoteId() {
+    // Generate a unique ID using timestamp and random bytes
+    // Format: note_timestamp_randomhex
+    $timestamp = microtime(true) * 10000; // microseconds
+    $random = bin2hex(random_bytes(8));
+    return 'note_' . intval($timestamp) . '_' . $random;
 }
 
 function validateEmail($email) {
@@ -199,7 +207,7 @@ switch ($path) {
         if ($method === 'GET') {
             // Get all notes for user
             $stmt = $db->prepare('
-                SELECT id, title, content, type, urgent, date
+                SELECT note_id as id, title, content, type, urgent, date
                 FROM notes 
                 WHERE user_id = ?
                 ORDER BY updated_at DESC
@@ -239,12 +247,12 @@ switch ($path) {
                 
                 // Insert new notes
                 $stmt = $db->prepare('
-                    INSERT INTO notes (id, user_id, title, content, type, urgent, date)
+                    INSERT INTO notes (note_id, user_id, title, content, type, urgent, date)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ');
                 
                 foreach ($notes as $note) {
-                    $stmt->bindValue(1, $note['id'] ?? uniqid(), SQLITE3_TEXT);
+                    $stmt->bindValue(1, $note['id'] ?? generateNoteId(), SQLITE3_TEXT);
                     $stmt->bindValue(2, $user_id, SQLITE3_INTEGER);
                     $stmt->bindValue(3, $note['title'] ?? '', SQLITE3_TEXT);
                     $stmt->bindValue(4, $note['content'] ?? '', SQLITE3_TEXT);
@@ -261,6 +269,117 @@ switch ($path) {
                 $db->exec('ROLLBACK');
                 http_response_code(500);
                 echo json_encode(['error' => 'Failed to sync notes']);
+            }
+        } elseif ($method === 'DELETE') {
+            // Delete a specific note
+            $note_id = $_GET['id'] ?? '';
+            
+            if (!$note_id) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Note ID required']);
+                exit;
+            }
+            
+            $stmt = $db->prepare('DELETE FROM notes WHERE note_id = ? AND user_id = ?');
+            $stmt->bindValue(1, $note_id, SQLITE3_TEXT);
+            $stmt->bindValue(2, $user_id, SQLITE3_INTEGER);
+            $result = $stmt->execute();
+            
+            if ($db->changes() > 0) {
+                echo json_encode(['success' => true]);
+            } else {
+                http_response_code(404);
+                echo json_encode(['error' => 'Note not found']);
+            }
+        }
+        break;
+        
+    case 'create_note':
+        $user_id = authenticateRequest($db);
+        if (!$user_id) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            exit;
+        }
+        
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        // Generate unique note ID
+        $note_id = generateNoteId();
+        
+        // Insert new note
+        $stmt = $db->prepare('
+            INSERT INTO notes (note_id, user_id, title, content, type, urgent, date)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ');
+        $stmt->bindValue(1, $note_id, SQLITE3_TEXT);
+        $stmt->bindValue(2, $user_id, SQLITE3_INTEGER);
+        $stmt->bindValue(3, $data['title'] ?? 'New Note', SQLITE3_TEXT);
+        $stmt->bindValue(4, $data['content'] ?? 'Start typing...', SQLITE3_TEXT);
+        $stmt->bindValue(5, $data['type'] ?? 'personal', SQLITE3_TEXT);
+        $stmt->bindValue(6, isset($data['urgent']) ? ($data['urgent'] ? 1 : 0) : 0, SQLITE3_INTEGER);
+        $stmt->bindValue(7, $data['date'] ?? date('n/j/Y'), SQLITE3_TEXT);
+        
+        if ($stmt->execute()) {
+            echo json_encode([
+                'id' => $note_id,
+                'title' => $data['title'] ?? 'New Note',
+                'content' => $data['content'] ?? 'Start typing...',
+                'type' => $data['type'] ?? 'personal',
+                'urgent' => isset($data['urgent']) ? (bool)$data['urgent'] : false,
+                'date' => $data['date'] ?? date('n/j/Y')
+            ]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to create note']);
+        }
+        break;
+        
+    case 'note':
+        $user_id = authenticateRequest($db);
+        if (!$user_id) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            exit;
+        }
+        
+        if ($method === 'PUT') {
+            // Update a specific note
+            $note_id = $_GET['id'] ?? '';
+            
+            if (!$note_id) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Note ID required']);
+                exit;
+            }
+            
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // Update note
+            $stmt = $db->prepare('
+                UPDATE notes 
+                SET title = ?, content = ?, type = ?, urgent = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE note_id = ? AND user_id = ?
+            ');
+            $stmt->bindValue(1, $data['title'] ?? '', SQLITE3_TEXT);
+            $stmt->bindValue(2, $data['content'] ?? '', SQLITE3_TEXT);
+            $stmt->bindValue(3, $data['type'] ?? 'personal', SQLITE3_TEXT);
+            $stmt->bindValue(4, isset($data['urgent']) ? ($data['urgent'] ? 1 : 0) : 0, SQLITE3_INTEGER);
+            $stmt->bindValue(5, $note_id, SQLITE3_TEXT);
+            $stmt->bindValue(6, $user_id, SQLITE3_INTEGER);
+            $result = $stmt->execute();
+            
+            if ($db->changes() > 0) {
+                echo json_encode(['success' => true]);
+            } else {
+                http_response_code(404);
+                echo json_encode(['error' => 'Note not found']);
             }
         }
         break;

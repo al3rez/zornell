@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Notes table with user association
 CREATE TABLE IF NOT EXISTS notes (
-    id TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id TEXT UNIQUE NOT NULL,
     user_id INTEGER NOT NULL,
     title TEXT,
     content TEXT,
@@ -32,5 +33,6 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_notes_note_id ON notes(note_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
