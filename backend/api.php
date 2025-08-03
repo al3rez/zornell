@@ -1,10 +1,19 @@
 <?php
 session_start();
 
+// Performance: Enable output compression
+if (!ob_get_level()) {
+    ob_start('ob_gzhandler');
+}
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Cache headers for API responses
+header('Cache-Control: no-cache, must-revalidate');
+header('Pragma: no-cache');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -12,26 +21,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Include database helper
+require_once __DIR__ . '/db-helper.php';
+
 // Database configuration
 $db_path = __DIR__ . '/data/zornell.db';
 $backup_dir = __DIR__ . '/data/backups';
 
-// Ensure directories exist
-if (!file_exists(dirname($db_path))) {
-    mkdir(dirname($db_path), 0755, true);
-}
+// Ensure backup directory exists
 if (!file_exists($backup_dir)) {
     mkdir($backup_dir, 0755, true);
 }
 
-// Initialize database
-$db = new SQLite3($db_path);
-$db->exec('PRAGMA foreign_keys = ON');
-$db->exec('PRAGMA journal_mode = WAL'); // Better concurrency
-
-// Create tables if not exist
-$schema = file_get_contents(__DIR__ . '/schema.sql');
-$db->exec($schema);
+// Get database instance
+$dbHelper = DatabaseHelper::getInstance();
+$db = $dbHelper->getDb();
 
 // Router
 $method = $_SERVER['REQUEST_METHOD'];
@@ -62,7 +66,7 @@ function authenticateRequest($db) {
         return null;
     }
     
-    $stmt = $db->prepare('
+    $stmt = $dbHelper->prepare('
         SELECT user_id 
         FROM sessions 
         WHERE token = ? AND expires_at > datetime("now")
@@ -114,7 +118,7 @@ switch ($path) {
         $hash = password_hash($password, PASSWORD_DEFAULT);
         
         // Check if email already exists
-        $checkStmt = $db->prepare('SELECT id FROM users WHERE email = ?');
+        $checkStmt = $dbHelper->prepare('SELECT id FROM users WHERE email = ?');
         $checkStmt->bindValue(1, $email, SQLITE3_TEXT);
         $result = $checkStmt->execute();
         
@@ -125,7 +129,7 @@ switch ($path) {
         }
         
         // Insert new user
-        $stmt = $db->prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)');
+        $stmt = $dbHelper->prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)');
         $stmt->bindValue(1, $email, SQLITE3_TEXT);
         $stmt->bindValue(2, $hash, SQLITE3_TEXT);
         
@@ -148,7 +152,7 @@ switch ($path) {
         $email = $data['email'] ?? '';
         $password = $data['password'] ?? '';
         
-        $stmt = $db->prepare('SELECT id, password_hash FROM users WHERE email = ?');
+        $stmt = $dbHelper->prepare('SELECT id, password_hash FROM users WHERE email = ?');
         $stmt->bindValue(1, $email, SQLITE3_TEXT);
         $result = $stmt->execute();
         $user = $result->fetchArray(SQLITE3_ASSOC);
@@ -158,14 +162,14 @@ switch ($path) {
             $token = generateToken();
             $expires = date('Y-m-d H:i:s', strtotime('+30 days'));
             
-            $stmt = $db->prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)');
+            $stmt = $dbHelper->prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)');
             $stmt->bindValue(1, $token, SQLITE3_TEXT);
             $stmt->bindValue(2, $user['id'], SQLITE3_INTEGER);
             $stmt->bindValue(3, $expires, SQLITE3_TEXT);
             $stmt->execute();
             
             // Update last login
-            $stmt = $db->prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?');
+            $stmt = $dbHelper->prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?');
             $stmt->bindValue(1, $user['id'], SQLITE3_INTEGER);
             $stmt->execute();
             
@@ -194,7 +198,7 @@ switch ($path) {
         $headers = getallheaders();
         $token = $headers['Authorization'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? '';
         
-        $stmt = $db->prepare('DELETE FROM sessions WHERE token = ?');
+        $stmt = $dbHelper->prepare('DELETE FROM sessions WHERE token = ?');
         $stmt->bindValue(1, $token, SQLITE3_TEXT);
         $stmt->execute();
         
@@ -211,7 +215,7 @@ switch ($path) {
         
         if ($method === 'GET') {
             // Get all notes for user
-            $stmt = $db->prepare('
+            $stmt = $dbHelper->prepare('
                 SELECT note_id as id, title, content, type, urgent, date
                 FROM notes 
                 WHERE user_id = ?
@@ -246,12 +250,12 @@ switch ($path) {
             
             try {
                 // Delete existing notes for user
-                $stmt = $db->prepare('DELETE FROM notes WHERE user_id = ?');
+                $stmt = $dbHelper->prepare('DELETE FROM notes WHERE user_id = ?');
                 $stmt->bindValue(1, $user_id, SQLITE3_INTEGER);
                 $stmt->execute();
                 
                 // Insert new notes
-                $stmt = $db->prepare('
+                $stmt = $dbHelper->prepare('
                     INSERT INTO notes (note_id, user_id, title, content, type, urgent, date)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ');
@@ -285,7 +289,7 @@ switch ($path) {
                 exit;
             }
             
-            $stmt = $db->prepare('DELETE FROM notes WHERE note_id = ? AND user_id = ?');
+            $stmt = $dbHelper->prepare('DELETE FROM notes WHERE note_id = ? AND user_id = ?');
             $stmt->bindValue(1, $note_id, SQLITE3_TEXT);
             $stmt->bindValue(2, $user_id, SQLITE3_INTEGER);
             $result = $stmt->execute();
@@ -319,7 +323,7 @@ switch ($path) {
         $note_id = generateNoteId();
         
         // Insert new note
-        $stmt = $db->prepare('
+        $stmt = $dbHelper->prepare('
             INSERT INTO notes (note_id, user_id, title, content, type, urgent, date)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ');
@@ -367,7 +371,7 @@ switch ($path) {
             $data = json_decode(file_get_contents('php://input'), true);
             
             // Update note
-            $stmt = $db->prepare('
+            $stmt = $dbHelper->prepare('
                 UPDATE notes 
                 SET title = ?, content = ?, type = ?, urgent = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE note_id = ? AND user_id = ?

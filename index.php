@@ -1,6 +1,10 @@
 <?php
 session_start();
 
+// Performance: Set caching headers for HTML (short cache for dynamic content)
+header('Cache-Control: private, max-age=300'); // 5 minutes
+header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 300) . ' GMT');
+
 // Check if user is authenticated via session
 $isAuthenticated = false;
 $userEmail = null;
@@ -577,6 +581,15 @@ body.has-selection .delete-selected-btn {
     word-wrap: break-word;
     max-height: 120px;
     overflow-y: auto;
+    /* Performance: Optimize scrolling */
+    -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
+}
+
+/* Lazy loading styles */
+.note-content.loading {
+    color: #888;
+    font-style: italic;
 }
 
 .note-footer {
@@ -1309,34 +1322,62 @@ body.has-selection .delete-selected-btn {
             }
         }
 
+        // Debounced update queue for performance
+        const updateQueue = new Map();
+        let updateTimer = null;
+        
         async function updateNote(id, field, value) {
             const note = notesMap.get(id);
             if (note) {
                 note[field] = value;
                 
-                // Update on server if authenticated
+                // Update on server if authenticated with debouncing
                 if (auth && auth.isAuthenticated()) {
-                    try {
-                        const response = await fetch(`${AUTH_API_URL}?action=note&id=${id}`, {
-                            method: 'PUT',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': auth.token
-                            },
-                            body: JSON.stringify({
-                                title: note.title,
-                                content: note.content,
-                                type: note.type,
-                                urgent: note.urgent
-                            })
-                        });
-                        
-                        if (!response.ok) {
-                            console.error('Failed to update note on server');
-                        }
-                    } catch (error) {
-                        console.error('Error updating note:', error);
+                    // Add to update queue
+                    if (!updateQueue.has(id)) {
+                        updateQueue.set(id, {});
                     }
+                    updateQueue.get(id)[field] = value;
+                    
+                    // Clear existing timer
+                    if (updateTimer) {
+                        clearTimeout(updateTimer);
+                    }
+                    
+                    // Set new timer to batch updates
+                    updateTimer = setTimeout(async () => {
+                        // Process all queued updates
+                        for (const [noteId, fields] of updateQueue) {
+                            const noteToUpdate = notesMap.get(noteId);
+                            if (noteToUpdate) {
+                                try {
+                                    const response = await fetch(`${AUTH_API_URL}?action=note&id=${noteId}`, {
+                                        method: 'PUT',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': auth.token
+                                        },
+                                        body: JSON.stringify({
+                                            title: noteToUpdate.title,
+                                            content: noteToUpdate.content,
+                                            type: noteToUpdate.type,
+                                            urgent: noteToUpdate.urgent
+                                        })
+                                    });
+                                    
+                                    if (!response.ok) {
+                                        console.error('Failed to update note on server');
+                                    }
+                                } catch (error) {
+                                    console.error('Error updating note:', error);
+                                }
+                            }
+                        }
+                        
+                        // Clear the queue
+                        updateQueue.clear();
+                        updateTimer = null;
+                    }, 500); // 500ms debounce delay
                 }
             }
         }
@@ -1773,6 +1814,39 @@ body.has-selection .delete-selected-btn {
             showAuthForm();
         }
         
+        // Intersection Observer for lazy loading note content
+        let contentObserver = null;
+        
+        function setupLazyLoading() {
+            if ('IntersectionObserver' in window) {
+                contentObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const noteCard = entry.target;
+                            const contentEl = noteCard.querySelector('.note-content');
+                            if (contentEl && contentEl.classList.contains('loading')) {
+                                // Load actual content
+                                const noteId = noteCard.dataset.id;
+                                const note = notesMap.get(noteId);
+                                if (note) {
+                                    contentEl.textContent = note.content;
+                                    contentEl.classList.remove('loading');
+                                }
+                            }
+                            contentObserver.unobserve(noteCard);
+                        }
+                    });
+                }, {
+                    rootMargin: '50px' // Start loading 50px before visible
+                });
+                
+                // Observe all note cards
+                document.querySelectorAll('.note-card:not(.add-note-placeholder)').forEach(card => {
+                    contentObserver.observe(card);
+                });
+            }
+        }
+        
         // Initialize
         auth = new ZornellAuth();
         
@@ -1780,6 +1854,8 @@ body.has-selection .delete-selected-btn {
             loadUserNotes();
             updateUserUI();
             startSync();
+            // Setup lazy loading after initial load
+            requestAnimationFrame(() => setupLazyLoading());
         } else {
             loadSampleNotes();
             showAuthForm();
