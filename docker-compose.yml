@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  zornell:
+    image: php:8.1-cli
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ./backend/data:/app/backend/data
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "
+        apt-get update && apt-get install -y sqlite3 libsqlite3-dev &&
+        docker-php-ext-install pdo pdo_sqlite &&
+        mkdir -p /app/backend/data/backups &&
+        chmod -R 777 /app/backend/data &&
+        php -S 0.0.0.0:8000
+      "
+    environment:
+      - TZ=UTC

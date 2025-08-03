@@ -26,6 +26,7 @@ body {
     margin-bottom: 10px;
     padding-bottom: 10px;
     border-bottom: 1px solid #ff0;
+    gap: 5px;
 }
 
 h1 {
@@ -38,6 +39,7 @@ h1 {
     display: flex;
     gap: 5px;
     align-items: center;
+    margin-left: auto;
 }
 
 .search-delete-container {
@@ -431,11 +433,26 @@ body.has-selection .delete-selected-btn {
     .add-note-placeholder {
         display: none;
     }
+    
+    .header {
+        flex-wrap: wrap;
+    }
+    
+    .controls {
+        order: 2;
+        width: 100%;
+        margin-top: 10px;
+    }
+    
+    .user-section {
+        order: 1;
+    }
+    
+    .user-email {
+        display: none; /* Hide email on mobile, keep logout */
+    }
 }
 
-.controls {
-    position: relative;
-}
 
 .export-btn {
     padding: 6px 12px;
@@ -495,4 +512,170 @@ body.has-selection .delete-selected-btn {
 
 .hidden {
     display: none !important;
+}
+
+/* Authentication Styles */
+.auth-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.auth-form {
+    background: #111;
+    border: 1px solid #0ff;
+    padding: 40px;
+    border-radius: 2px;
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-form h2 {
+    color: #ff0;
+    margin: 0 0 8px 0;
+    font-size: 1.8em;
+    text-align: center;
+    font-weight: 700;
+}
+
+.auth-subtitle {
+    color: #0ff;
+    text-align: center;
+    margin: 0 0 32px 0;
+    font-size: 0.9em;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border: 1px solid #0ff;
+    border-radius: 2px;
+    font-size: 14px;
+    background: #000;
+    color: #0ff;
+    font-family: inherit;
+}
+
+.auth-form input:focus {
+    outline: none;
+    border-color: #ff0;
+    box-shadow: 0 0 10px rgba(255, 255, 0, 0.3);
+}
+
+.auth-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.auth-buttons button {
+    flex: 1;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 2px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.1s;
+    font-family: inherit;
+    text-transform: uppercase;
+}
+
+#loginBtn {
+    background: #0ff;
+    color: #000;
+    border: 1px solid #0ff;
+}
+
+#loginBtn:hover {
+    background: #000;
+    color: #0ff;
+}
+
+#registerBtn {
+    background: transparent;
+    color: #ff0;
+    border: 1px solid #ff0;
+}
+
+#registerBtn:hover {
+    background: #ff0;
+    color: #000;
+}
+
+.auth-error {
+    color: #f00;
+    text-align: center;
+    margin-top: 16px;
+    font-size: 12px;
+}
+
+.auth-footer {
+    margin-top: 32px;
+    text-align: center;
+}
+
+.auth-footer p {
+    color: #888;
+    font-size: 11px;
+}
+
+.feature-list {
+    text-align: left;
+}
+
+.feature-list p {
+    color: #0ff;
+    font-size: 12px;
+    margin: 6px 0;
+    opacity: 0.8;
+}
+
+/* User section */
+.user-section {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    position: relative;
+}
+
+/* User info display */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.user-email {
+    color: #0ff;
+    font-size: 12px;
+}
+
+.logout-btn {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid #f00;
+    border-radius: 2px;
+    color: #f00;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.1s;
+    font-family: inherit;
+    font-weight: 600;
+}
+
+.logout-btn:hover {
+    background: #f00;
+    color: #fff;
 }

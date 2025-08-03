@@ -1,0 +1,44 @@
+# Database files
+backend/data/zornell.db
+backend/data/backups/
+
+# Local configuration
+README-LOCAL.md
+mise.toml
+
+# Original/reference files
+original.html
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+error_log
+access_log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# PHP specific
+vendor/
+composer.phar
+
+# Test artifacts
+coverage/
+.phpunit.result.cache
